@@ -1,11 +1,11 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { pusher } from "@/lib/pusher";
 
 export async function PATCH(
-  request: Request,
+  request: NextRequest,
   { params }: { params: { id: string } }
-) {
+): Promise<NextResponse> {
   try {
     const { id } = params;
     const body = await request.json();
@@ -30,25 +30,36 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  request: Request,
+  req: NextRequest,
   { params }: { params: { id: string } }
-) {
+): Promise<NextResponse> {
   try {
     const { id } = params;
+    
+    // Your deletion logic
+    const post = await prisma.post.findUnique({
+      where: { id },
+    });
 
-    // Delete post from database
+    if (!post) {
+      return NextResponse.json({ message: "Post not found" }, { status: 404 });
+    }
+
     await prisma.post.delete({
       where: { id },
     });
 
-    // Trigger Pusher event for real-time update
+    // Add Pusher trigger for real-time deletion notification
     await pusher.trigger("ephemeral-wall", "delete-post", { id });
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json(
+      { message: "Post deleted successfully" },
+      { status: 200 }
+    );
   } catch (error) {
     console.error("Error deleting post:", error);
     return NextResponse.json(
-      { error: "Failed to delete post" },
+      { message: "Error deleting post" },
       { status: 500 }
     );
   }
