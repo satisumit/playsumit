@@ -4,10 +4,10 @@ import { pusher } from "@/lib/pusher";
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
   try {
-    const { id } = params;
+    const { id } =await params;
     const body = await request.json();
 
     // Update post in database
