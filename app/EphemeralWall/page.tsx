@@ -3,7 +3,6 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { nanoid } from "nanoid";
 import { motion, AnimatePresence } from "framer-motion";
 import { Pin, Trash2, AlertTriangle, Smile } from "lucide-react";
-import confetti from "canvas-confetti";
 import Pusher from "pusher-js";
 
 // Types for our posts
@@ -312,18 +311,6 @@ const EphemeralWall: React.FC = () => {
 
         setNewMessage("");
 
-        // Trigger confetti effect
-        if (wallRef.current) {
-          const rect = wallRef.current.getBoundingClientRect();
-          confetti({
-            particleCount: 100,
-            spread: 70,
-            origin: {
-              y: (position.top / 100) * (rect.height / window.innerHeight),
-              x: (position.left / 100) * (rect.width / window.innerWidth),
-            },
-          });
-        }
       } catch (error) {
         console.error("Error creating post:", error);
         setErrorMessage(
