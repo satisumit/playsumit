@@ -49,13 +49,78 @@ const EphemeralWall: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [wallBackground, setWallBackground] = useState("cork-board");
   const [isConnected, setIsConnected] = useState(false);
+  // Add these state variables
+  const [wallHeight, setWallHeight] = useState(0);
+  const [averagePostHeight, setAveragePostHeight] = useState(150); // Default estimate
 
   const wallRef = useRef<HTMLDivElement>(null);
   const pusherRef = useRef<Pusher | null>(null);
   const channelRef = useRef<any>(null);
-
   const MAX_CHARACTERS = 100;
   const POST_LIFETIME_MS = 3600000; // 1 hour in milliseconds
+  // Add these constants at the top of your component
+  const GRID_SIZE = 10; // Define the number of grid cells in each direction
+
+  // Add this function to get a random grid position
+  const getRandomGridPosition = useCallback(() => {
+    // Generate random grid coordinates
+    const gridRow = Math.floor(Math.random() * GRID_SIZE);
+    const gridCol = Math.floor(Math.random() * GRID_SIZE);
+
+    // Convert grid coordinates to percentage positions
+    return {
+      top: (gridRow * 100) / GRID_SIZE,
+      left: (gridCol * 100) / GRID_SIZE,
+    };
+  }, [GRID_SIZE]);
+
+  // Add this useEffect to measure the wall container
+  useEffect(() => {
+    if (!wallRef.current) return;
+
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setWallHeight(entry.contentRect.height);
+      }
+    });
+
+    resizeObserver.observe(wallRef.current);
+
+    return () => {
+      if (wallRef.current) {
+        resizeObserver.unobserve(wallRef.current);
+      }
+    };
+  }, []);
+  // Add this useEffect to calculate average post height
+  useEffect(() => {
+    if (posts.length === 0 || !wallRef.current) return;
+
+    // Use setTimeout to ensure posts have rendered
+    const timer = setTimeout(() => {
+      const postElements = wallRef.current?.querySelectorAll(".post-note");
+      if (!postElements || postElements.length === 0) return;
+
+      let totalHeight = 0;
+      postElements.forEach((el) => {
+        totalHeight += el.getBoundingClientRect().height;
+      });
+
+      const newAverageHeight = totalHeight / postElements.length;
+      setAveragePostHeight(newAverageHeight);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [posts]);
+  // Add this function to determine if scrolling is needed
+  const isScrollNeeded = React.useMemo(() => {
+    // Basic check - if we have more than X posts, enable scrolling
+    if (posts.length >= 15) return true;
+
+    // More precise check - calculate total content height
+    const estimatedContentHeight = posts.length * averagePostHeight;
+    return estimatedContentHeight > wallHeight;
+  }, [posts.length, averagePostHeight, wallHeight]);
 
   // Memoize these arrays to prevent unnecessary re-renders
   const colors = React.useMemo(
@@ -273,11 +338,8 @@ const EphemeralWall: React.FC = () => {
       setIsLoading(true);
 
       try {
-        // Create random position (with some padding from edges)
-        const position = {
-          top: Math.floor(Math.random() * 70) + 10, // 10-80% of container height
-          left: Math.floor(Math.random() * 70) + 10, // 10-80% of container width
-        };
+        // Get a random grid position instead of completely random position
+        const position = getRandomGridPosition();
 
         const color = colors[Math.floor(Math.random() * colors.length)];
         const pinColor =
@@ -310,7 +372,6 @@ const EphemeralWall: React.FC = () => {
         }
 
         setNewMessage("");
-
       } catch (error) {
         console.error("Error creating post:", error);
         setErrorMessage(
@@ -322,7 +383,7 @@ const EphemeralWall: React.FC = () => {
         setIsLoading(false);
       }
     },
-    [newMessage, highestZIndex, colors, pinColors]
+    [newMessage, highestZIndex, colors, pinColors, getRandomGridPosition]
   );
 
   const handlePostClick = useCallback(
@@ -445,52 +506,16 @@ const EphemeralWall: React.FC = () => {
 
   return (
     <div
-      className={`flex flex-col h-screen ${getThemeClasses()} transition-colors duration-300`}
+      className={`flex flex-col lg:flex-row h-screen ${getThemeClasses()} transition-colors duration-300`}
     >
-      <header className="p-4 shadow-md">
-        <div className="container mx-auto flex flex-col md:flex-row justify-between items-center">
-          <h1 className="text-3xl font-bold mb-3 md:mb-0">
-            <span className="mr-2">📝</span>
-            The Ephemeral Wall
-            {isConnected && (
-              <span className="ml-2 text-sm bg-green-500 text-white px-2 py-1 rounded-full">
-                Live
-              </span>
-            )}
-          </h1>
-
-          <div className="flex space-x-2">
-            <select
-              value={wallBackground}
-              onChange={handleBackgroundChange}
-              className="px-3 py-1 rounded bg-white text-gray-800 border border-gray-300"
-            >
-              <option value="cork-board">Cork Board</option>
-              <option value="chalkboard">Chalkboard</option>
-              <option value="whiteboard">Whiteboard</option>
-              <option value="bulletin">Bulletin Board</option>
-            </select>
-
-            <select
-              value={theme}
-              onChange={handleThemeChange}
-              className="px-3 py-1 rounded bg-white text-gray-800 border border-gray-300"
-            >
-              <option value="light">Light Theme</option>
-              <option value="dark">Dark Theme</option>
-              <option value="colorful">Colorful Theme</option>
-            </select>
-          </div>
-        </div>
-      </header>
-
-      {/* Wall container */}
+      {/* Wall container - left side on desktop */}
       <div
         ref={wallRef}
-        className={`flex-grow relative ${
+        className={`flex-grow lg:w-4/5 relative ${
           backgrounds[wallBackground as keyof typeof backgrounds]
-        } overflow-hidden shadow-inner p-4`}
+        } ${isScrollNeeded ? "overflow-y-auto" : "overflow-hidden"} p-4`}
       >
+        {/* Post rendering code remains the same */}
         <AnimatePresence>
           {posts.map((post) => {
             const timeLeft = new Date(post.expiresAt).getTime() - Date.now();
@@ -504,7 +529,7 @@ const EphemeralWall: React.FC = () => {
                 animate={{ opacity, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.8, rotate: post.rotation * 2 }}
                 transition={{ duration: 0.3 }}
-                className={`absolute ${post.color} rounded-md p-4 w-64 cursor-pointer shadow-lg border-2`}
+                className={`absolute ${post.color} rounded-md p-4 lg:w-64 w-48 cursor-pointer shadow-lg border-2 post-note`}
                 style={{
                   top: `${post.position.top}%`,
                   left: `${post.position.left}%`,
@@ -531,9 +556,9 @@ const EphemeralWall: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Post content */}
+                {/* Post content with responsive text size */}
                 <div className="mt-3 pt-1">
-                  <p className="text-gray-800 whitespace-pre-wrap break-words font-medium">
+                  <p className="text-gray-800 whitespace-pre-wrap break-words font-medium lg:text-base text-sm">
                     {post.message}
                   </p>
 
@@ -561,24 +586,6 @@ const EphemeralWall: React.FC = () => {
                       }}
                     />
                   </div>
-
-                  {/* Action buttons */}
-                  <div className="flex justify-between mt-3 pt-2 border-t border-gray-200">
-                    <button
-                      onClick={(e) => likePost(post.id, e)}
-                      className="flex items-center text-gray-600 hover:text-blue-500 transition-colors"
-                    >
-                      <Smile className="mr-1" />
-                      <span>{post.likes > 0 ? post.likes : ""}</span>
-                    </button>
-
-                    <button
-                      onClick={(e) => deletePost(post.id, e)}
-                      className="text-gray-600 hover:text-red-500 transition-colors"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
                 </div>
               </motion.div>
             );
@@ -595,17 +602,27 @@ const EphemeralWall: React.FC = () => {
         )}
       </div>
 
-      {/* Input form */}
+      {/* Right sidebar for desktop/tablet - contains title, input, and options */}
       <div
-        className={`p-4 shadow-lg ${
+        className={`lg:w-1/5 lg:flex flex-col ${
           theme === "dark" ? "bg-gray-800" : "bg-white"
-        }`}
+        } p-4 shadow-lg hidden`}
       >
-        <div className="container mx-auto">
-          <form
-            onSubmit={handleSubmit}
-            className="flex flex-col md:flex-row space-y-2 md:space-y-0 md:space-x-2"
-          >
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold">
+            <span className="mr-2">📝</span>
+            The Ephemeral Wall
+            {isConnected && (
+              <span className="ml-2 text-sm bg-green-500 text-white px-2 py-1 rounded-full">
+                Live
+              </span>
+            )}
+          </h1>
+        </div>
+
+        {/* Input form */}
+        <div className="mb-6">
+          <form onSubmit={handleSubmit} className="flex flex-col space-y-3">
             <div className="flex-grow relative">
               <textarea
                 value={newMessage}
@@ -617,17 +634,16 @@ const EphemeralWall: React.FC = () => {
                 } rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none`}
                 placeholder="Leave your ephemeral message..."
                 maxLength={MAX_CHARACTERS}
-                rows={2}
+                rows={4}
               />
               <div
                 className={`absolute bottom-2 right-2 text-sm ${
                   theme === "dark" ? "text-gray-400" : "text-gray-500"
                 }`}
               >
-                {" "}
-                {newMessage.length}/{MAX_CHARACTERS}{" "}
-              </div>{" "}
-            </div>{" "}
+                {newMessage.length}/{MAX_CHARACTERS}
+              </div>
+            </div>
             <button
               type="submit"
               disabled={isLoading}
@@ -637,17 +653,14 @@ const EphemeralWall: React.FC = () => {
                   : "bg-blue-500 hover:bg-blue-600 text-white"
               }`}
             >
-              {" "}
               {isLoading ? (
-                <span className="flex items-center">
-                  {" "}
+                <span className="flex items-center justify-center">
                   <svg
                     className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
                     xmlns="http://www.w3.org/2000/svg"
                     fill="none"
                     viewBox="0 0 24 24"
                   >
-                    {" "}
                     <circle
                       className="opacity-25"
                       cx="12"
@@ -655,19 +668,19 @@ const EphemeralWall: React.FC = () => {
                       r="10"
                       stroke="currentColor"
                       strokeWidth="4"
-                    ></circle>{" "}
+                    ></circle>
                     <path
                       className="opacity-75"
                       fill="currentColor"
                       d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                    ></path>{" "}
-                  </svg>{" "}
-                  Posting...{" "}
+                    ></path>
+                  </svg>
+                  Posting...
                 </span>
               ) : (
                 "Post Note"
-              )}{" "}
-            </button>{" "}
+              )}
+            </button>
           </form>
           <AnimatePresence>
             {showError && (
@@ -682,25 +695,212 @@ const EphemeralWall: React.FC = () => {
               </motion.div>
             )}
           </AnimatePresence>
+        </div>
 
-          <div className="flex justify-between mt-2">
-            <p
-              className={`text-sm ${
+        {/* Personalization options */}
+        <div className="space-y-4">
+          <h3 className="font-medium text-lg">Personalize Your Wall</h3>
+
+          <div className="space-y-2">
+            <label
+              className={`block ${
+                theme === "dark" ? "text-gray-300" : "text-gray-700"
+              }`}
+            >
+              Background Style
+            </label>
+            <select
+              value={wallBackground}
+              onChange={handleBackgroundChange}
+              className="w-full px-3 py-2 rounded bg-white text-gray-800 border border-gray-300"
+            >
+              <option value="cork-board">Cork Board</option>
+              <option value="chalkboard">Chalkboard</option>
+              <option value="whiteboard">Whiteboard</option>
+              <option value="bulletin">Bulletin Board</option>
+            </select>
+          </div>
+
+          <div className="space-y-2">
+            <label
+              className={`block ${
+                theme === "dark" ? "text-gray-300" : "text-gray-700"
+              }`}
+            >
+              Theme
+            </label>
+            <select
+              value={theme}
+              onChange={handleThemeChange}
+              className="w-full px-3 py-2 rounded bg-white text-gray-800 border border-gray-300"
+            >
+              <option value="light">Light Theme</option>
+              <option value="dark">Dark Theme</option>
+              <option value="colorful">Colorful Theme</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="mt-auto pt-6">
+          <p
+            className={`text-sm ${
+              theme === "dark" ? "text-gray-400" : "text-gray-500"
+            }`}
+          >
+            Your message will disappear after 1 hour. Click the pin to fix a
+            note in place.
+          </p>
+
+          {!isConnected && (
+            <p className="text-sm text-red-500 flex items-center mt-2">
+              <span className="inline-block w-2 h-2 bg-red-500 rounded-full mr-2 animate-pulse"></span>
+              Offline - Reconnecting...
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Mobile layout - input at bottom */}
+      <div
+        className={`lg:hidden fixed bottom-0 left-0 right-0 ${
+          theme === "dark" ? "bg-gray-800" : "bg-white"
+        } p-3 shadow-lg z-[500]`}
+      >
+        <form onSubmit={handleSubmit} className="flex space-x-2">
+          <div className="flex-grow relative">
+            <textarea
+              value={newMessage}
+              onChange={handleMessageChange}
+              className={`w-full p-2 border ${
+                theme === "dark"
+                  ? "bg-gray-700 text-white border-gray-600"
+                  : "bg-white text-gray-800 border-blue-200"
+              } rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none text-sm`}
+              placeholder="Leave your message..."
+              maxLength={MAX_CHARACTERS}
+              rows={1}
+            />
+            <div
+              className={`absolute bottom-1 right-2 text-xs ${
                 theme === "dark" ? "text-gray-400" : "text-gray-500"
               }`}
             >
-              Your message will disappear after 1 hour. Click the pin to fix a
-              note in place.
-            </p>
-
-            {!isConnected && (
-              <p className="text-sm text-red-500 flex items-center">
-                <span className="inline-block w-2 h-2 bg-red-500 rounded-full mr-2 animate-pulse"></span>
-                Offline - Reconnecting...
-              </p>
-            )}
+              {newMessage.length}/{MAX_CHARACTERS}
+            </div>
           </div>
-        </div>
+
+          <div className="flex space-x-1">
+            {/* Personalization buttons for mobile */}
+            <button
+              type="button"
+              onClick={() => {
+                const themes = ["light", "dark", "colorful"];
+                const currentIndex = themes.indexOf(theme);
+                const nextIndex = (currentIndex + 1) % themes.length;
+                setTheme(themes[nextIndex] as "light" | "dark" | "colorful");
+              }}
+              className="p-2 bg-gray-200 rounded-full"
+              title="Change Theme"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <circle cx="12" cy="12" r="5"></circle>
+                <path d="M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"></path>
+              </svg>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                const backgrounds = [
+                  "cork-board",
+                  "chalkboard",
+                  "whiteboard",
+                  "bulletin",
+                ];
+                const currentIndex = backgrounds.indexOf(wallBackground);
+                const nextIndex = (currentIndex + 1) % backgrounds.length;
+                setWallBackground(backgrounds[nextIndex]);
+              }}
+              className="p-2 bg-gray-200 rounded-full"
+              title="Change Background"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                <path d="M21 15l-5-5L5 21"></path>
+              </svg>
+            </button>
+
+            <button
+              type="submit"
+              disabled={isLoading}
+              className={`px-3 py-2 rounded-lg font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-300 ${
+                isLoading
+                  ? "bg-gray-400 cursor-not-allowed"
+                  : "bg-blue-500 hover:bg-blue-600 text-white"
+              }`}
+            >
+              {isLoading ? (
+                <svg
+                  className="animate-spin h-5 w-5 text-white"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  ></circle>
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  ></path>
+                </svg>
+              ) : (
+                "Post"
+              )}
+            </button>
+          </div>
+        </form>
+
+        <AnimatePresence>
+          {showError && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              className="mt-2 p-2 bg-red-100 text-red-700 rounded-md flex items-center text-sm"
+            >
+              <AlertTriangle className="mr-2 h-4 w-4" />
+              {errorMessage}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );
