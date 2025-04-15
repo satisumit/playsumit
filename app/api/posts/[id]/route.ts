@@ -31,11 +31,11 @@ export async function PATCH(
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
   try {
-    const { id } = params;
-    
+    const { id } =await params;
+
     // Your deletion logic
     const post = await prisma.post.findUnique({
       where: { id },
