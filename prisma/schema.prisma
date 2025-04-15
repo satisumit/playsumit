@@ -1,0 +1,23 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Post {
+  id             String   @id @default(cuid())
+  message        String
+  positionTop    Float
+  positionLeft   Float
+  color          String
+  pinColor       String
+  createdAt      DateTime @default(now())
+  expiresAt      DateTime
+  zIndex         Int
+  rotation       Float
+  isPinned       Boolean  @default(false)
+  likes          Int      @default(0)
+}

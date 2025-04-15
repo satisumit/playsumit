@@ -10,10 +10,12 @@ import {
 } from "@/components/ui/sheet";
 import EphemeralWallCard from "@/components/EphemeralWallCard";
 import Image from "next/image";
+import Link from "next/link";
 
 const GameCard = ({ title, concept, category, level, color, imageBg }: any) => {
   return (
-    <div className="bg-white dark:bg-zinc-800 rounded-lg shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden h-full flex flex-col">
+    <Link className="bg-white dark:bg-zinc-800 rounded-lg shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden h-full flex flex-col"
+    href="./EphemeralWall">
       {/* Image Section */}
       <div className={` ${imageBg} bg-cover bg-center relative aspect-[2/1]`}>
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end pt-2 px-2">
@@ -49,12 +51,12 @@ const GameCard = ({ title, concept, category, level, color, imageBg }: any) => {
           {concept}
         </p>
         <button
-          className={`mt-4 text-sm font-medium py-2 px-4 rounded-lg ${color} text-white hover:opacity-90 transition-opacity`}
+          className={`mt-4 text-sm font-medium py-2 px-4 rounded-lg ${color} text-white hover:opacity-90  hover:scale-105 duration-300 ease-in-out transition-all transform-gpu cursor-pointer`}
         >
           Play Now
         </button>
       </div>
-    </div>
+    </Link>
   );
 };
 
